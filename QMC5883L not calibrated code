@@ -1,0 +1,59 @@
+#include <Wire.h>
+
+#define QMC_ADDR 0x0D // QMC5883L հասցեն
+
+void setup() {
+  Serial.begin(9600); // Uno-ի համար ստանդարտ 9600-ը ավելի կայուն է
+  
+  // Arduino Uno-ի դեպքում Wire.begin()-ը ավտոմատ օգտագործում է 
+  // A4 (SDA) և A5 (SCL) ոտիկները:
+  Wire.begin(); 
+
+  // Սենսորի կոնֆիգուրացիա (Control Register 1)
+  Wire.beginTransmission(QMC_ADDR);
+  Wire.write(0x09); 
+  Wire.write(0x1D); // Continuous mode, 200Hz, 8G, 512 OSR
+  if (Wire.endTransmission() != 0) {
+    Serial.println("Սխալ: QMC5883L-ը չի գտնվել:");
+    while(1); // Կանգնեցնել ծրագիրը
+  }
+
+  // Set/Reset Register (պարտադիր է սենսորի աշխատանքի համար)
+  Wire.beginTransmission(QMC_ADDR);
+  Wire.write(0x0B); 
+  Wire.write(0x01); 
+  Wire.endTransmission();
+
+  Serial.println("QMC5883L-ը միացված է: Սկսում ենք...");
+}
+
+void loop() {
+  Wire.beginTransmission(QMC_ADDR);
+  Wire.write(0x00); // Սկսել տվյալների առաջին ռեգիստրից
+  Wire.endTransmission(false);
+  
+  Wire.requestFrom(QMC_ADDR, 6); // Կարդալ 6 բայթ
+
+  if (Wire.available() >= 6) {
+    // Կարդում ենք LSB և MSB բայթերը
+    int16_t x = (int16_t)(Wire.read() | (Wire.read() << 8));
+    int16_t y = (int16_t)(Wire.read() | (Wire.read() << 8));
+    int16_t z = (int16_t)(Wire.read() | (Wire.read() << 8));
+
+    // Հաշվարկում ենք անկյունը (Heading)
+    float heading = atan2(y, x) * 180.0 / PI;
+    
+    // Ուղղում ենք 0-360 աստիճանի միջակայք
+    if (heading < 0) {
+      heading += 360.0;
+    }
+
+    Serial.print("X: "); Serial.print(x);
+    Serial.print(" Y: "); Serial.print(y);
+    Serial.print(" | Անկյուն: "); 
+    Serial.print(heading);
+    Serial.println("°");
+  }
+
+  delay(200); 
+}
